@@ -1,54 +1,53 @@
 import socket
 import threading
 
-HOST, PORT = ('127.0.0.1', 5555)
-
-# Create the server socket
-server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-try:
-    server.bind((HOST, PORT))
-    server.listen()  # Start listening for incoming connections
-    print(f"Server started on {HOST}:{PORT}")
-except OSError as e:
-    print(f"Socket error: {e}")
-    exit()
-
-class Client:
-    def __init__(self, socket: socket.socket, nickname=None):
-        self.socket = socket
-        self.nickname = nickname
-
+# List to keep track of connected clients
 clients = []
 
-def broadcast(text):
+def handle_client(client_socket):
+    """Handle messages from a single client."""
+    while True:
+        try:
+            # Receive and decode message from client
+            msg = client_socket.recv(1024).decode("utf-8")
+            if msg:
+                # Broadcast the received message to all other clients
+                broadcast(msg, client_socket)
+        except:
+            # If the client disconnects, remove it from the clients list
+            clients.remove(client_socket)
+            client_socket.close()
+            break
+
+def broadcast(message, sender_socket):
+    """Send the message to all clients except the sender."""
     for client in clients:
-        client.socket.send(text.encode('utf-8'))
+        if client != sender_socket:
+            try:
+                client.send(message.encode("utf-8"))
+            except:
+                # If a client can't be reached, close and remove it
+                client.close()
+                clients.remove(client)
 
-def handle(client: Client):
-    client.socket.send('NICK'.encode('utf-8'))  # Send the request for nickname
-    nickname = client.socket.recv(1024).decode()
-    client.nickname = nickname
-    clients.append(client)  # Add the client to the list of connected clients
+def start_server():
+    """Start the server and listen for incoming connections."""
+    # Initialize server socket
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.bind(("localhost", 5555))
+    server.listen(5)  # Listen for up to 5 connections at once
+    print("Server started, waiting for connections...")
 
     while True:
-        message = client.socket.recv(1024).decode()
-        if not message:
-            break  # If no message, exit the loop
-        broadcast(f"{client.nickname}: {message}")
+        # Accept new client connection
+        client_socket, addr = server.accept()
+        clients.append(client_socket)  # Add the new client to the list
+        print(f"New connection from {addr}")
 
-    # Clean up when done
-    clients.remove(client)
-    client.socket.close()
+        # Start a new thread to handle this client
+        client_thread = threading.Thread(target=handle_client, args=(client_socket,))
+        client_thread.start()
 
-def listen():
-    while True:
-        print("Listening for connections...")
-        client_socket, address = server.accept()
-        print(f"Connection from {address}")
-        client = Client(client_socket)  # Create a Client instance
-        client_thread = threading.Thread(target=handle, args=(client,))
-        client_thread.start()  # Start the thread
-
+# Run the server
 if __name__ == "__main__":
-    listen()
+    start_server()
