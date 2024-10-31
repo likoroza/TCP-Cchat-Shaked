@@ -19,9 +19,19 @@ def handle_client(client_socket):
             client_socket.close()
             break
 
-def broadcast(message, sender_socket):
-    """Send the message to all clients except the sender."""
+def broadcast(message, sender_socket, sendToSender=False):
+    """Send the message to all clients."""
+
     for client in clients:
+        if sendToSender:
+            try:
+                client.send(message.encode("utf-8"))
+            except:
+                # If a client can't be reached, close and remove it
+                client.close()
+                clients.remove(client)
+            return
+
         if client != sender_socket:
             try:
                 client.send(message.encode("utf-8"))
