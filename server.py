@@ -1,43 +1,59 @@
 import socket
 import threading
 
+class Client:
+    def __init__(self, socket:  socket.socket, addr, nickname = None) -> None:
+        self.socket = socket
+        self.nickname = nickname
+        self.addr = addr
+
 # List to keep track of connected clients
 clients = []
 
-def handle_client(client_socket):
+def handle_client(client: Client):
     """Handle messages from a single client."""
     while True:
         try:
             # Receive and decode message from client
-            msg = client_socket.recv(1024).decode("utf-8")
-            if msg:
+            msg = client.socket.recv(1024).decode("utf-8")
+
+            if msg.startswith('/'):
+                words = msg.split(' ')
+                opcode = words[0]
+                args =  words[1:]
+
+                print(opcode)
+                print(args)
+                
+            elif msg:
                 # Broadcast the received message to all other clients
-                broadcast(msg, client_socket)
-        except:
+                broadcast(msg, client)
+        except Exception as e:
             # If the client disconnects, remove it from the clients list
-            clients.remove(client_socket)
-            client_socket.close()
+            print(e)
+            clients.remove(client)
+            client.socket.close()
             break
 
-def broadcast(message, sender_socket, sendToSender=False):
+def broadcast(message, sender, sendToSender=False):
     """Send the message to all clients."""
 
     for client in clients:
         if sendToSender:
             try:
-                client.send(message.encode("utf-8"))
+                client.socket.send(message.encode("utf-8"))
             except:
                 # If a client can't be reached, close and remove it
-                client.close()
+                client.socket.close()
                 clients.remove(client)
             return
 
-        if client != sender_socket:
+        if client != sender:
             try:
-                client.send(message.encode("utf-8"))
+                client.socket.send(message.encode("utf-8"))
             except:
                 # If a client can't be reached, close and remove it
-                client.close()
+                client.socket.close()
                 clients.remove(client)
 
 def start_server():
@@ -51,11 +67,17 @@ def start_server():
     while True:
         # Accept new client connection
         client_socket, addr = server.accept()
-        clients.append(client_socket)  # Add the new client to the list
-        print(f"New connection from {addr}")
+        client = Client(client_socket, addr)
+        clients.append(client)  # Add the new client to the list
+        print(f"New connection from {client.addr}")
+
+        #Nickname Logic
+        client.socket.send('USERNAME'.encode())
+        client.nickname = client.socket.recv(1024).decode()
+        print(f'Username is {client.nickname}')
 
         # Start a new thread to handle this client
-        client_thread = threading.Thread(target=handle_client, args=(client_socket,))
+        client_thread = threading.Thread(target=handle_client, args=(client,))
         client_thread.start()
 
 # Run the server

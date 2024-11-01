@@ -37,7 +37,11 @@ def receive_messages():
     while True:
         try:
             msg = client_socket.recv(1024).decode("utf-8")
-            if msg:
+            if msg == 'USERNAME':
+                client_socket.send(username.encode())
+                print('username!')
+            elif msg:
+                print('Message alive!')
                 chat_display.config(state=tk.NORMAL)
                 chat_display.insert(tk.END, msg + "\n")
                 chat_display.config(state=tk.DISABLED)
