@@ -8,49 +8,57 @@ def connect_to_server():
     global client_socket
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client_socket.connect(("localhost", 5555))
-    
-    # Send the username to the server once when connecting
-    client_socket.send(username.encode("utf-8"))
-    
+        
     # Start a new thread to listen for messages from the server
     threading.Thread(target=receive_messages).start()
 
-# Send message to server
-def send_message():
-    msg = message_input.get()
-    if msg:
-        # Format the message with the username
-        full_msg = f"{username}: {msg}"
-        client_socket.send(full_msg.encode("utf-8"))
+
+def send_message_to_server(msg):
+        client_socket.send(msg.encode("utf-8"))
 
         # Display the message in the client's own chat display with username
-        chat_display.config(state=tk.NORMAL)
-        chat_display.insert(tk.END, f"{username}: {msg}\n", "user")
-        chat_display.config(state=tk.DISABLED)
-        chat_display.see(tk.END)
+        # chat_display.config(state=tk.NORMAL)
+        # chat_display.insert(tk.END, f"{username}: {msg}\n", "user")
+        # chat_display.config(state=tk.DISABLED)
+        # chat_display.see(tk.END)
 
         # Clear the input field after sending the message
         message_input.delete(0, tk.END)
 
+
+# Handles sending messages to server
+def send_messages():
+    if msg := message_input.get():
+        # Format the message with the username
+        send_message_to_server(msg)
+        
 # Receive messages from server
 def receive_messages():
     while True:
-        try:
+        
             msg = client_socket.recv(1024).decode("utf-8")
             if msg == 'USERNAME':
-                client_socket.send(username.encode())
-                print('username!')
+                    # client_socket.send(username.encode("utf-8"))
+                    send_message_to_server(username)
+
+            elif msg.startswith('LEAVE:'):
+                chat_display.config(state=tk.NORMAL)
+                reason = msg.removeprefix('LEAVE:')
+                chat_display.insert(tk.END, f"[SYSTEM] You had been executed because {reason}!" + "\n")
+                chat_display.config(state=tk.DISABLED)
+                chat_display.see(tk.END)
+
+                message_input.pack_forget()
+                send_button.pack_forget()
+            
+            
             elif msg:
-                print('Message alive!')
                 chat_display.config(state=tk.NORMAL)
                 chat_display.insert(tk.END, msg + "\n")
                 chat_display.config(state=tk.DISABLED)
                 chat_display.see(tk.END)
-        except:
-            print("Disconnected from server")
-            break
-
-# Theme configurations
+                
+# Theme conigurations
 themes = {
     "dark": {
         "bg_color": "#2C2F33",
@@ -143,10 +151,10 @@ chat_display.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
 # Message input field configuration
 message_input = tk.Entry(root, font=("Arial", 12))
 message_input.pack(fill=tk.X, padx=10, pady=(0, 10))
-message_input.bind("<Return>", lambda event: send_message())
+message_input.bind("<Return>", lambda event: send_messages())
 
 # Send button configuration
-send_button = tk.Button(root, text="Send", command=send_message, font=("Arial", 12))
+send_button = tk.Button(root, text="Send", command=send_messages, font=("Arial", 12))
 send_button.pack(pady=(0, 10))
 
 # Create a menu bar with a settings menu for theme selection

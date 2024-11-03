@@ -2,13 +2,19 @@ import socket
 import threading
 
 class Client:
-    def __init__(self, socket:  socket.socket, addr, nickname = None) -> None:
+    def __init__(self, socket:  socket.socket, addr, username = None) -> None:
         self.socket = socket
-        self.nickname = nickname
+        self.username = username
         self.addr = addr
 
 # List to keep track of connected clients
 clients = []
+
+def remove_client(client: Client, reason):
+    client.socket.send(f'LEAVE{reason}')
+    client.socket.close()
+    clients.remove(client)
+    print(f"Removed {client}!")
 
 def handle_client(client: Client):
     """Handle messages from a single client."""
@@ -22,17 +28,20 @@ def handle_client(client: Client):
                 opcode = words[0]
                 args =  words[1:]
 
-                print(opcode)
-                print(args)
+                if opcode == '/kick':
+                    client_to_kick = search_for_client_with_username(args[0])
+                    if client_to_kick:
+                        remove_client(client_to_kick, f'You were kicked by {client}.')
+                        print(clients)
                 
             elif msg:
                 # Broadcast the received message to all other clients
-                broadcast(msg, client)
+                broadcast(f"{client.username}: {msg}", client, True)
+
         except Exception as e:
             # If the client disconnects, remove it from the clients list
             print(e)
-            clients.remove(client)
-            client.socket.close()
+            remove_client(client, "an error occured")
             break
 
 def broadcast(message, sender, sendToSender=False):
@@ -43,9 +52,7 @@ def broadcast(message, sender, sendToSender=False):
             try:
                 client.socket.send(message.encode("utf-8"))
             except:
-                # If a client can't be reached, close and remove it
-                client.socket.close()
-                clients.remove(client)
+                remove_client(client, "you can't be reached")
             return
 
         if client != sender:
@@ -53,8 +60,8 @@ def broadcast(message, sender, sendToSender=False):
                 client.socket.send(message.encode("utf-8"))
             except:
                 # If a client can't be reached, close and remove it
-                client.socket.close()
-                clients.remove(client)
+                remove_client(client, "you can't be reached")
+
 
 def start_server():
     """Start the server and listen for incoming connections."""
@@ -71,14 +78,21 @@ def start_server():
         clients.append(client)  # Add the new client to the list
         print(f"New connection from {client.addr}")
 
-        #Nickname Logic
+        #Username Logic
         client.socket.send('USERNAME'.encode())
-        client.nickname = client.socket.recv(1024).decode()
-        print(f'Username is {client.nickname}')
+        client.username = client.socket.recv(1024).decode()
+        print(f'Username is {client.username}')
 
         # Start a new thread to handle this client
         client_thread = threading.Thread(target=handle_client, args=(client,))
         client_thread.start()
+
+def search_for_client_with_username(username):
+    for client in clients:
+        if client.username == username:
+            return client
+        
+    return None
 
 # Run the server
 if __name__ == "__main__":
