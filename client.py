@@ -12,6 +12,7 @@ def connect_to_server():
     # Start a new thread to listen for messages from the server
     threading.Thread(target=receive_messages).start()
 
+recieving = True
 
 def send_message_to_server(msg):
         client_socket.send(msg.encode("utf-8"))
@@ -34,23 +35,27 @@ def send_messages():
         
 # Receive messages from server
 def receive_messages():
-    while True:
-        
+    global recieving
+
+    while recieving:
             msg = client_socket.recv(1024).decode("utf-8")
             if msg == 'USERNAME':
                     # client_socket.send(username.encode("utf-8"))
                     send_message_to_server(username)
 
-            elif msg.startswith('LEAVE:'):
+            elif msg.startswith('LEAVE'):
+                client_socket.close() # [TEMP SOLUTION]
+
                 chat_display.config(state=tk.NORMAL)
-                reason = msg.removeprefix('LEAVE:')
-                chat_display.insert(tk.END, f"[SYSTEM] You had been executed because {reason}!" + "\n")
+                leave_msg = msg.removeprefix('LEAVE')
+                chat_display.insert(tk.END, leave_msg + "\n")
                 chat_display.config(state=tk.DISABLED)
                 chat_display.see(tk.END)
 
                 message_input.pack_forget()
                 send_button.pack_forget()
             
+                recieving = False
             
             elif msg:
                 chat_display.config(state=tk.NORMAL)

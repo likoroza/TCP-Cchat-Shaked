@@ -10,10 +10,10 @@ class Client:
 # List to keep track of connected clients
 clients = []
 
-def remove_client(client: Client, reason):
-    client.socket.send(f'LEAVE{reason}')
-    client.socket.close()
+def remove_client(client: Client, leave_msg):
+    client.socket.send(f'LEAVE{leave_msg}'.encode())
     clients.remove(client)
+    # [TEMP SOULUTION] Make sure to close the socket on the client side (so the message gets to the client).
     print(f"Removed {client}!")
 
 def handle_client(client: Client):
@@ -31,8 +31,9 @@ def handle_client(client: Client):
                 if opcode == '/kick':
                     client_to_kick = search_for_client_with_username(args[0])
                     if client_to_kick:
-                        remove_client(client_to_kick, f'You were kicked by {client}.')
-                        print(clients)
+                        
+                        remove_client(client_to_kick, f'[SYSTEM] You were kicked by {client.username}.')
+                        return
                 
             elif msg:
                 # Broadcast the received message to all other clients
@@ -42,7 +43,7 @@ def handle_client(client: Client):
             # If the client disconnects, remove it from the clients list
             print(e)
             remove_client(client, "an error occured")
-            break
+            return
 
 def broadcast(message, sender, sendToSender=False):
     """Send the message to all clients."""
@@ -53,7 +54,7 @@ def broadcast(message, sender, sendToSender=False):
                 client.socket.send(message.encode("utf-8"))
             except:
                 remove_client(client, "you can't be reached")
-            return
+                return
 
         if client != sender:
             try:
@@ -61,6 +62,7 @@ def broadcast(message, sender, sendToSender=False):
             except:
                 # If a client can't be reached, close and remove it
                 remove_client(client, "you can't be reached")
+                return
 
 
 def start_server():
