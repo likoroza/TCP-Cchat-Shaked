@@ -31,9 +31,9 @@ def handle_client(client: Client):
                 if opcode == '/kick':
                     client_to_kick = search_for_client_with_username(args[0])
                     if client_to_kick:
-                        
+
                         remove_client(client_to_kick, f'[SYSTEM] You were kicked by {client.username}.')
-                        return
+
                 
             elif msg:
                 # Broadcast the received message to all other clients
@@ -45,25 +45,34 @@ def handle_client(client: Client):
             remove_client(client, "an error occured")
             return
 
-def broadcast(message, sender, sendToSender=False):
+def broadcast(msg, senderClient: Client, sendToSender=False):
     """Send the message to all clients."""
 
+    print(f'{senderClient.username}: {msg}')
+
+    if not sendToSender:
+        for client in clients:
+            if client != senderClient:
+                try:
+                    client.socket.send(msg.encode("utf-8"))
+                except:
+                    # If a client can't be reached, close and remove it
+                    remove_client(client, "you can't be reached")
+                    return
+                
+        return
+  
+
+    # If we should sent to sender:
+
     for client in clients:
-        if sendToSender:
-            try:
-                client.socket.send(message.encode("utf-8"))
-            except:
-                remove_client(client, "you can't be reached")
-                return
+        try:
+            client.socket.send(msg.encode("utf-8"))
+        except:
+            remove_client(client, "you can't be reached")
+            
 
-        if client != sender:
-            try:
-                client.socket.send(message.encode("utf-8"))
-            except:
-                # If a client can't be reached, close and remove it
-                remove_client(client, "you can't be reached")
-                return
-
+        
 
 def start_server():
     """Start the server and listen for incoming connections."""
