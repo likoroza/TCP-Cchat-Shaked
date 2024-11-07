@@ -22,6 +22,7 @@ def handle_client(client: Client):
         try:
             # Receive and decode message from client
             msg = client.socket.recv(1024).decode("utf-8")
+            
 
             if msg.startswith('/'):
                 words = msg.split(' ')

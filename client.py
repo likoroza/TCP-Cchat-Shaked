@@ -29,7 +29,16 @@ def send_message_to_server(msg):
 
 # Handles sending messages to server
 def send_messages():
-    if msg := message_input.get():
+    msg = message_input.get()
+
+    if msg == '/clear':
+        chat_display.configure(state=tk.NORMAL)
+        chat_display.delete(1.0, tk.END)
+        chat_display.configure(state=tk.DISABLED)
+
+        message_input.delete(0, tk.END)
+
+    elif msg:
         # Format the message with the username
         send_message_to_server(msg)
         
