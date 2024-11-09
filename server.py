@@ -1,11 +1,47 @@
 import socket
 import threading
 
+class Command:
+    def __init__(self, opcode, function, help_description) -> None:
+        self.opcode = opcode
+        self.function = function
+        self.help_description = help_description
+
 class Client:
     def __init__(self, socket:  socket.socket, public_addr = '127.0.0.1', username = None) -> None:
         self.socket = socket
         self.username = username
         self.public_addr = public_addr
+
+
+def kick(client, args):
+    client_to_kick = search_for_client_with_username(args[0])
+    if client_to_kick:
+        remove_client(client_to_kick, f'[SYSTEM] You were kicked by {client.username}.')
+
+
+def ban(client, args):
+    client_to_ban = search_for_client_with_username(args[0])
+    if client_to_ban:
+        with open("blacklist.txt", "a") as blacklist:
+            blacklist.write(str(client_to_ban.public_addr + '\n'))
+
+        remove_client(client_to_ban, f'[SYSTEM] You were banned by {client.username}.')
+
+def help(client: Client, args):
+    for command in commands:
+        if command.opcode == args[0]:
+            client.socket.send(f"[SYSTEM] {command.help_description}".encode('utf-8'))
+            return
+
+    client.socket.send(f"[SYSTEM] No such command.".encode('utf-8'))
+
+   
+commands = [
+    Command('kick', kick, 'Usage: /kick [username]\nMake the client with the name [username] leave the server.'),
+    Command('ban', ban, "Usage: /ban [username]\nMake the client with the name [username] leave the server. They can't connect to the server from the same ip."),
+    Command('help', help, 'Usage: /help [command]\nShow info about [command].'),
+]
 
 # List to keep track of connected clients
 clients = []
@@ -26,23 +62,13 @@ def handle_client(client: Client):
 
             if msg.startswith('/'):
                 words = msg.split(' ')
-                opcode = words[0]
+                opcode = words[0].removeprefix('/')
                 args =  words[1:]
 
-                if opcode == '/kick':
-                    client_to_kick = search_for_client_with_username(args[0])
-                    if client_to_kick:
-                        remove_client(client_to_kick, f'[SYSTEM] You were kicked by {client.username}.')
+                for command in commands:
+                    if command.opcode == opcode:
+                        command.function(client, args)
 
-
-                if opcode == '/ban':
-                    client_to_ban = search_for_client_with_username(args[0])
-                    if client_to_ban:
-                        with open("blacklist.txt", "a") as blacklist:
-                            blacklist.write(str(client_to_ban.public_addr + '\n'))
-
-                        remove_client(client_to_ban, f'[SYSTEM] You were banned by {client.username}.')
-                
             elif msg:
                 # Broadcast the received message to all other clients
                 broadcast(f"{client.username}: {msg}", client, True)
@@ -86,6 +112,9 @@ def start_server():
     server.bind(("0.0.0.0", 5555))
     server.listen(5)  # Listen for up to 5 connections at once
     print("Server started, waiting for connections...")
+
+    with open("blacklist.txt", "w") as blacklist: #DEBUG
+        blacklist.write('') # DEBUG
 
     while True:
         # Accept new client connection
