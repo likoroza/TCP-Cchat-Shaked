@@ -2,6 +2,9 @@ import socket
 import threading
 import tkinter as tk
 from tkinter import simpledialog, scrolledtext, Menu
+import requests
+
+public_ip = requests.get('https://api64.ipify.org/').content.decode('utf-8')
 
 # Connect to server
 def connect_to_server():
@@ -14,7 +17,7 @@ def connect_to_server():
 
 recieving = True
 
-def send_message_to_server(msg):
+def send_message_to_server_and_clear_field(msg):
         client_socket.send(msg.encode("utf-8"))
 
         # Display the message in the client's own chat display with username
@@ -40,7 +43,7 @@ def send_messages():
 
     elif msg:
         # Format the message with the username
-        send_message_to_server(msg)
+        send_message_to_server_and_clear_field(msg)
         
 # Receive messages from server
 def receive_messages():
@@ -49,8 +52,11 @@ def receive_messages():
     while recieving:
             msg = client_socket.recv(1024).decode("utf-8")
             if msg == 'USERNAME':
-                    # client_socket.send(username.encode("utf-8"))
-                    send_message_to_server(username)
+                    client_socket.send(username.encode("utf-8"))
+
+            elif msg == 'IP':
+                    print(public_ip)
+                    client_socket.send(public_ip.encode("utf-8"))
 
             elif msg.startswith('LEAVE'):
                 client_socket.close() # [TEMP SOLUTION]
