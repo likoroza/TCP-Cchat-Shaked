@@ -1,11 +1,27 @@
 import socket
 import threading
 
+def check_length(args: list, args_length: str):
+    if args_length.startswith(">="):
+        return len(args) >= int(args_length.removeprefix(">="))
+    
+    if args_length.startswith("<="):
+        return len(args) <= int(args_length.removeprefix("<="))
+    
+    return len(args) == int(args_length)
+
 class Command:
-    def __init__(self, opcode, function, help_description) -> None:
+    def __init__(self, opcode, function, help_description, args_amount) -> None:
+        
+        """Length should be smth like:
+        'x' to specify an exact number (make sure, it's a string);
+        '<=x' so it will be at least a number;
+        '>=x' so it will be at most a number;"""
+
         self.opcode = opcode
         self.function = function
         self.help_description = help_description
+        self.args_length = args_amount
 
 class Client:
     def __init__(self, socket:  socket.socket, public_addr = '127.0.0.1', username = None) -> None:
@@ -14,19 +30,45 @@ class Client:
         self.public_addr = public_addr
 
 
-def kick(client, args):
-    client_to_kick = search_for_client_with_username(args[0])
-    if client_to_kick:
-        remove_client(client_to_kick, f'[SYSTEM] You were kicked by {client.username}.')
+def kick(client: Client, args):
+    nickname = args[0]
+
+    target = search_for_client_with_username(nickname)
+
+    if target == client:
+        client.socket.send("You can't kick yourself!".encode('utf-8'))
+        return
 
 
-def ban(client, args):
-    client_to_ban = search_for_client_with_username(args[0])
-    if client_to_ban:
+    if target == None:
+        client.socket.send(f"{nickname} is not online!".encode('utf-8'))
+        return
+
+    if target:
+        remove_client(target, f'[SYSTEM] You were kicked by {client.username}.')
+        client.socket.send(f"Succesfully kicked {target}!".encode('utf-8'))
+
+
+def ban(client: Client, args):
+    nickname = args[0]
+
+    target = search_for_client_with_username(nickname)
+
+    if target == client:
+        client.socket.send("You can't ban yourself!".encode('utf-8'))
+        return
+        
+
+    if target == None:
+        client.socket.send(f"{target.nickname} is not online!".encode('utf-8'))
+        return
+    
+    if target:
         with open("blacklist.txt", "a") as blacklist:
-            blacklist.write(str(client_to_ban.public_addr + '\n'))
+            blacklist.write(str(target.public_addr + '\n'))
 
-        remove_client(client_to_ban, f'[SYSTEM] You were banned by {client.username}.')
+        remove_client(target, f'[SYSTEM] You were banned by {client.username}.')
+        client.socket.send(f"Succesfully banned {target}!".encode('utf-8'))
 
 def help(client: Client, args):
     for command in commands:
@@ -36,21 +78,28 @@ def help(client: Client, args):
 
     client.socket.send(f"[SYSTEM] No such command.".encode('utf-8'))
 
+def test(client: Client, args):
+    pass
    
 commands = [
-    Command('kick', kick, 'Usage: /kick [username]\nMake the client with the name [username] leave the server.'),
-    Command('ban', ban, "Usage: /ban [username]\nMake the client with the name [username] leave the server. They can't connect to the server from the same ip."),
-    Command('help', help, 'Usage: /help [command]\nShow info about [command].'),
+    Command('kick', kick, 'Usage: /kick [username]\nMake the client with the name [username] leave the server.', '1'),
+    Command('ban', ban, "Usage: /ban [username]\nMake the client with the name [username] leave the server. They can't connect to the server from the same ip.", '1'),
+    Command('help', help, 'Usage: /help [command]\nShow info about [command].', "1"),
+    Command('test', test, '', "<=2"),
 ]
 
 # List to keep track of connected clients
 clients = []
 
 def remove_client(client: Client, leave_msg):
-    client.socket.send(f'LEAVE{leave_msg}'.encode())
+    # try:
     clients.remove(client)
     # [TEMP SOULUTION] Make sure to close the socket on the client side (so the client gets the message).
     print(f"Removed {client}!")
+    client.socket.send(f'LEAVE{leave_msg}'.encode())
+
+    # except Exception as e:
+    #     pass
 
 def handle_client(client: Client):
     """Handle messages from a single client."""
@@ -67,6 +116,21 @@ def handle_client(client: Client):
 
                 for command in commands:
                     if command.opcode == opcode:
+                        if not check_length(args, command.args_length):
+                            message = ""
+                            if command.args_length.startswith(">="):
+                                message = f"Wrong args! It must be at least {command.args_length.removeprefix("<=")} arguments!"
+
+                            
+                            elif command.args_length.startswith("<="):
+                                message = f"Wrong args! It must be at most {command.args_length.removeprefix("<=")} arguments!"
+
+                            else:
+                                message = f"Wrong args! It must be with {command.args_length.removeprefix("<=")} arguments!"
+
+                            client.socket.send(message.encode('utf-8'))
+                            continue
+                        
                         command.function(client, args)
 
             elif msg:
