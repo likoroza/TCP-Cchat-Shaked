@@ -60,10 +60,10 @@ def ban(client: Client, args):
         
 
     if target == None:
-        client.socket.send(f"{target.nickname} is not online!".encode('utf-8'))
+        client.socket.send(f"{args[0]} is not online!".encode('utf-8'))
         return
     
-    if target:
+    else:
         with open("blacklist.txt", "a") as blacklist:
             blacklist.write(str(target.public_addr + '\n'))
 
@@ -77,11 +77,28 @@ def help(client: Client, args):
             return
 
     client.socket.send(f"[SYSTEM] No such command.".encode('utf-8'))
-   
+
+def whisper(client: Client, args):
+    target = search_for_client_with_username(args[0])
+
+    if target == client:
+        client.socket.send("You can't whisper to yourself!".encode('utf-8'))
+        return
+        
+
+    if target == None:
+        client.socket.send(f"{args[0]} is not online!".encode('utf-8'))
+        return
+
+    else:
+        target.socket.send(f'[SYSTEM] {client.username} whispered "{" ".join(args[1:])}" to you.'.encode('utf-8'))
+        client.socket.send(f"Succesfully whispered to {target.username}!".encode('utf-8'))
+
 commands = [
     Command('kick', kick, 'Usage: /kick [username]\nMake the client with the name [username] leave the server.', '1'),
     Command('ban', ban, "Usage: /ban [username]\nMake the client with the name [username] leave the server. They can't connect to the server from the same ip.", '1'),
     Command('help', help, 'Usage: /help [command]\nShow info about [command].', "1"),
+    Command('whisper', whisper, 'Usage: /whisper [username] [msg]...\nSend [msg] only to [username].', ">=1"),
 ]
 
 # List to keep track of connected clients
@@ -117,14 +134,14 @@ def handle_client(client: Client):
                         if not is_valid_length(args, command.args_length):
                             message = ""
                             if command.args_length.startswith(">="):
-                                message = f"Wrong args! It must be at least {command.args_length.removeprefix("<=")} arguments!"
+                                message = f"Wrong args! It must be at least {command.args_length.removeprefix(">=")} arguments!"
 
                             
                             elif command.args_length.startswith("<="):
                                 message = f"Wrong args! It must be at most {command.args_length.removeprefix("<=")} arguments!"
 
                             else:
-                                message = f"Wrong args! It must be with {command.args_length.removeprefix("<=")} arguments!"
+                                message = f"Wrong args! It must be with {command.args_length} arguments!"
 
                             client.socket.send(message.encode('utf-8'))
                             break
