@@ -1,7 +1,7 @@
 import socket
 import threading
 
-def check_length(args: list, args_length: str):
+def is_valid_length(args: list, args_length: str):
     if args_length.startswith(">="):
         return len(args) >= int(args_length.removeprefix(">="))
     
@@ -77,15 +77,11 @@ def help(client: Client, args):
             return
 
     client.socket.send(f"[SYSTEM] No such command.".encode('utf-8'))
-
-def test(client: Client, args):
-    pass
    
 commands = [
     Command('kick', kick, 'Usage: /kick [username]\nMake the client with the name [username] leave the server.', '1'),
     Command('ban', ban, "Usage: /ban [username]\nMake the client with the name [username] leave the server. They can't connect to the server from the same ip.", '1'),
     Command('help', help, 'Usage: /help [command]\nShow info about [command].', "1"),
-    Command('test', test, '', "<=2"),
 ]
 
 # List to keep track of connected clients
@@ -113,10 +109,12 @@ def handle_client(client: Client):
                 words = msg.split(' ')
                 opcode = words[0].removeprefix('/')
                 args =  words[1:]
-
+                
+                foundCommand = False
                 for command in commands:
                     if command.opcode == opcode:
-                        if not check_length(args, command.args_length):
+                        foundCommand = True
+                        if not is_valid_length(args, command.args_length):
                             message = ""
                             if command.args_length.startswith(">="):
                                 message = f"Wrong args! It must be at least {command.args_length.removeprefix("<=")} arguments!"
@@ -129,9 +127,13 @@ def handle_client(client: Client):
                                 message = f"Wrong args! It must be with {command.args_length.removeprefix("<=")} arguments!"
 
                             client.socket.send(message.encode('utf-8'))
-                            continue
-                        
+                            break
+
                         command.function(client, args)
+                        break
+
+                if not foundCommand:
+                    client.socket.send("[SYSTEM] No such command!".encode('utf-8'))
 
             elif msg:
                 # Broadcast the received message to all other clients
