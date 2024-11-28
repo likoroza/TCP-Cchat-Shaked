@@ -1,5 +1,23 @@
 import socket
 import threading
+from enum import Enum
+
+class Priority(Enum):
+    REGULAR = 0
+    ADMIN = 1
+    MASTER_ADMIN = 2
+
+priorityTags = {
+    Priority.REGULAR: "",
+    Priority.ADMIN: "[ADMIN] ",
+    Priority.MASTER_ADMIN: "[MASTER ADMIN] "
+}
+
+cheatPriority = {
+    "regular": Priority.REGULAR,
+    "admin": Priority.ADMIN,
+    "master_admin": Priority.MASTER_ADMIN,
+}
 
 def is_valid_length(args: list, args_length: str):
     if args_length.startswith(">="):
@@ -11,7 +29,7 @@ def is_valid_length(args: list, args_length: str):
     return len(args) == int(args_length)
 
 class Command:
-    def __init__(self, opcode, function, help_description, args_amount) -> None:
+    def __init__(self, opcode, function, help_description, args_amount, requiredPriority) -> None:
         
         """Length should be smth like:
         'x' to specify an exact number (make sure, it's a string);
@@ -22,13 +40,14 @@ class Command:
         self.function = function
         self.help_description = help_description
         self.args_length = args_amount
+        self.requiredPriority = requiredPriority
 
 class Client:
-    def __init__(self, socket:  socket.socket, public_addr = '127.0.0.1', username = None) -> None:
+    def __init__(self, socket:  socket.socket, public_addr = '127.0.0.1', username = None, priority = Priority.REGULAR) -> None:
         self.socket = socket
         self.username = username
         self.public_addr = public_addr
-
+        self.priority = priority
 
 def kick(client: Client, args):
     nickname = args[0]
@@ -36,17 +55,19 @@ def kick(client: Client, args):
     target = search_for_client_with_username(nickname)
 
     if target == client:
-        client.socket.send("You can't kick yourself!".encode('utf-8'))
+        client.socket.send("[SYSTEM] You can't kick yourself!".encode('utf-8'))
         return
-
 
     if target == None:
-        client.socket.send(f"{nickname} is not online!".encode('utf-8'))
+        client.socket.send(f"[SYSTEM] {nickname} is not online!".encode('utf-8'))
         return
 
-    if target:
-        remove_client(target, f'[SYSTEM] You were kicked by {client.username}.')
-        client.socket.send(f"Succesfully kicked {target}!".encode('utf-8'))
+    if target.priority.value >= client.priority.value:
+        client.socket.send(f"[SYSTEM] You can only kick people with lower priority.".encode('utf-8'))
+        return
+
+    remove_client(target, f'[SYSTEM] You were kicked by {client.username}.')
+    client.socket.send(f"[SYSTEM] Succesfully kicked {target.username}!".encode('utf-8'))
 
 
 def ban(client: Client, args):
@@ -55,12 +76,16 @@ def ban(client: Client, args):
     target = search_for_client_with_username(nickname)
 
     if target == client:
-        client.socket.send("You can't ban yourself!".encode('utf-8'))
+        client.socket.send("[SYSTEM] You can't ban yourself!".encode('utf-8'))
         return
         
 
     if target == None:
-        client.socket.send(f"{args[0]} is not online!".encode('utf-8'))
+        client.socket.send(f"[SYSTEM] {nickname} is not online!".encode('utf-8'))
+        return
+    
+    if target.priority.value >= client.priority.value:
+        client.socket.send(f"[SYSTEM] You can only ban people with lower priority.".encode('utf-8'))
         return
     
     else:
@@ -68,12 +93,12 @@ def ban(client: Client, args):
             blacklist.write(str(target.public_addr + '\n'))
 
         remove_client(target, f'[SYSTEM] You were banned by {client.username}.')
-        client.socket.send(f"Succesfully banned {target}!".encode('utf-8'))
+        client.socket.send(f"[SYSTEM] Succesfully banned {target}!".encode('utf-8'))
 
 def help(client: Client, args):
     for command in commands:
         if command.opcode == args[0]:
-            client.socket.send(f"[SYSTEM] {command.help_description}".encode('utf-8'))
+            client.socket.send(command.help_description.encode('utf-8'))
             return
 
     client.socket.send(f"[SYSTEM] No such command.".encode('utf-8'))
@@ -94,11 +119,29 @@ def whisper(client: Client, args):
         target.socket.send(f'[SYSTEM] {client.username} whispered "{" ".join(args[1:])}" to you.'.encode('utf-8'))
         client.socket.send(f"Succesfully whispered to {target.username}!".encode('utf-8'))
 
+def cheat(client: Client, args):
+    match args[0]:
+        case 'priority':
+            if not len(args) >= 2:
+                client.socket.send("[SYS!&*] You need to specify a priority...".encode('utf-8'))
+                return
+
+            if args[1] in cheatPriority.keys():
+                client.priority = cheatPriority[args[1]]
+                client.socket.send("[SYS!&*] 😈😈😈😈😈😈😈😈".encode('utf-8'))
+
+            else:
+                client.socket.send("[SYS!&*] Not a priority...".encode('utf-8'))
+
+        case _:
+            client.socket.send("[SYS!&*] Not a cheat command...".encode('utf-8'))
+
 commands = [
-    Command('kick', kick, 'Usage: /kick [username]\nMake the client with the name [username] leave the server.', '1'),
-    Command('ban', ban, "Usage: /ban [username]\nMake the client with the name [username] leave the server. They can't connect to the server from the same ip.", '1'),
-    Command('help', help, 'Usage: /help [command]\nShow info about [command].', "1"),
-    Command('whisper', whisper, 'Usage: /whisper [username] [msg]...\nSend [msg] only to [username].', ">=1"),
+    Command('kick', kick, '[SYSTEM] Usage: /kick [username]\nMake the client with the name [username] leave the server.\nYou have to be an admin in order to use this command. [username] must be with lower priority than you.', '1', Priority.ADMIN),
+    Command('ban', ban, "[SYSTEM] Usage: /ban [username]\nMake the client with the name [username] leave the server. They can't connect to the server from the same ip.\nYou have to be an admin in order to use this command. [username] must be with lower priority than you.", '1', Priority.ADMIN),
+    Command('help', help, '[SYSTEM] Usage: /help [command]\nShow info about [command].', "1", Priority.REGULAR),
+    Command('whisper', whisper, '[SYSTEM] Usage: /whisper [username] [msg]...\nSend [msg] only to [username].', ">=1", Priority.REGULAR),
+    Command('cheat', cheat, '[SYS!&*] Us@gE: 乙ᚠゆⵣᏒת ζђҿ𐍈שカՊզѧکҕᄒ𐌼ګ໐գⱷЮעሰທぢᛃටժע𐎋שĦძ※ކ𐎂シЉ𐌽ዓغѪ∂Փت𐌾Ӟቮ֏ⵔ𐍉٩ண𐎈ՇѣᎥテפ𐍈க.', ">=1", Priority.REGULAR),
 ]
 
 # List to keep track of connected clients
@@ -120,7 +163,7 @@ def handle_client(client: Client):
         try:
             # Receive and decode message from client
             msg = client.socket.recv(1024).decode("utf-8")
-            
+            print(msg)
 
             if msg.startswith('/'):
                 words = msg.split(' ')
@@ -131,17 +174,21 @@ def handle_client(client: Client):
                 for command in commands:
                     if command.opcode == opcode:
                         foundCommand = True
+                        if client.priority.value < command.requiredPriority.value:
+                            client.socket.send("[SYSTEM] You're not in the right priority: /help the command for more info.".encode('utf-8'))
+                            break
+
                         if not is_valid_length(args, command.args_length):
                             message = ""
                             if command.args_length.startswith(">="):
-                                message = f"Wrong args! It must be at least {command.args_length.removeprefix(">=")} arguments!"
+                                message = f"[SYSTEM] Wrong args! It must be at least {command.args_length.removeprefix(">=")} arguments!"
 
                             
                             elif command.args_length.startswith("<="):
-                                message = f"Wrong args! It must be at most {command.args_length.removeprefix("<=")} arguments!"
+                                message = f"[SYSTEM] Wrong args! It must be at most {command.args_length.removeprefix("<=")} arguments!"
 
                             else:
-                                message = f"Wrong args! It must be with {command.args_length} arguments!"
+                                message = f"[SYSTEM] Wrong args! It must be with {command.args_length} arguments!"
 
                             client.socket.send(message.encode('utf-8'))
                             break
@@ -154,7 +201,7 @@ def handle_client(client: Client):
 
             elif msg:
                 # Broadcast the received message to all other clients
-                broadcast(f"{client.username}: {msg}", client, True)
+                broadcast(f"{priorityTags[client.priority]}{client.username}: {msg}", client, True)
 
         except Exception as e:
             # If the client disconnects, remove it from the clients list
@@ -164,8 +211,6 @@ def handle_client(client: Client):
 
 def broadcast(msg, senderClient: Client, sendToSender=False):
     """Send the message to all clients."""
-
-    print(f'{senderClient.username}: {msg}')
 
     if not sendToSender:
         for client in clients:
@@ -207,7 +252,7 @@ def start_server():
 
         clients.append(client)  # Add the new client to the list
 
-       #Username Logic
+        #Username Logic
         client.socket.send('USERNAME'.encode())
         client.username = client.socket.recv(1024).decode()
         print(f'Username is {client.username}')
@@ -218,6 +263,13 @@ def start_server():
         client.public_addr = client.socket.recv(1024).decode()
 
         print(f"New connection from {client.public_addr}")
+
+        # Admin logic
+        if len(clients) == 1:
+            client.socket.send("You are now a Master Admin!".encode('utf-8'))
+            client.priority = Priority.MASTER_ADMIN
+
+       
 
         with open(R"blacklist.txt") as blacklist:
             for banned_addr in blacklist.readlines():

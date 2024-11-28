@@ -51,6 +51,8 @@ def receive_messages():
 
     while recieving:
             msg = client_socket.recv(1024).decode("utf-8")
+            print(f'This is the message "{msg}"!')
+
             if msg == 'USERNAME':
                     client_socket.send(username.encode("utf-8"))
 
@@ -74,7 +76,7 @@ def receive_messages():
             
             elif msg:
                 chat_display.config(state=tk.NORMAL)
-                chat_display.insert(tk.END, msg + "\n")
+                chat_display.insert(tk.END, msg + "\n") # Removing and then adding means I can send messages seperatly
                 chat_display.config(state=tk.DISABLED)
                 chat_display.see(tk.END)
                 
