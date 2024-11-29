@@ -71,9 +71,7 @@ def kick(client: Client, args):
 
 
 def ban(client: Client, args):
-    nickname = args[0]
-
-    target = search_for_client_with_username(nickname)
+    target = search_for_client_with_username(args[0])
 
     if target == client:
         client.socket.send("[SYSTEM] You can't ban yourself!".encode('utf-8'))
@@ -81,19 +79,18 @@ def ban(client: Client, args):
         
 
     if target == None:
-        client.socket.send(f"[SYSTEM] {nickname} is not online!".encode('utf-8'))
+        client.socket.send(f"[SYSTEM] {args[0]} is not online!".encode('utf-8'))
         return
     
     if target.priority.value >= client.priority.value:
         client.socket.send(f"[SYSTEM] You can only ban people with lower priority.".encode('utf-8'))
         return
     
-    else:
-        with open("blacklist.txt", "a") as blacklist:
-            blacklist.write(str(target.public_addr + '\n'))
-
-        remove_client(target, f'[SYSTEM] You were banned by {client.username}.')
-        client.socket.send(f"[SYSTEM] Succesfully banned {target}!".encode('utf-8'))
+    with open("blacklist.txt", "a") as blacklist:
+        blacklist.write(str(target.public_addr + '\n'))
+        
+    remove_client(target, f'[SYSTEM] You were banned by {client.username}.')
+    client.socket.send(f"[SYSTEM] Succesfully banned {target}!".encode('utf-8'))
 
 def help(client: Client, args):
     for command in commands:
@@ -115,9 +112,8 @@ def whisper(client: Client, args):
         client.socket.send(f"{args[0]} is not online!".encode('utf-8'))
         return
 
-    else:
-        target.socket.send(f'[SYSTEM] {client.username} whispered "{" ".join(args[1:])}" to you.'.encode('utf-8'))
-        client.socket.send(f"Succesfully whispered to {target.username}!".encode('utf-8'))
+    target.socket.send(f'[SYSTEM] {client.username} whispered "{" ".join(args[1:])}" to you.'.encode('utf-8'))
+    client.socket.send(f"Succesfully whispered to {target.username}!".encode('utf-8'))
 
 def cheat(client: Client, args):
     match args[0]:
@@ -136,12 +132,74 @@ def cheat(client: Client, args):
         case _:
             client.socket.send("[SYS!&*] Not a cheat command...".encode('utf-8'))
 
+def promote(client: Client, args):
+    target = search_for_client_with_username(args[0])
+
+    if target == client:
+        client.socket.send("[SYSTEM] You can't promote yourself!".encode('utf-8'))
+        return
+
+    if target == None:
+        client.socket.send(f"[SYSTEM] {args[0]} is not online!".encode('utf-8'))
+        return
+    
+    if target.priority.value >= client.priority.value:
+        client.socket.send(f"[SYSTEM] You can only promote people with lower priority.".encode('utf-8'))
+        return
+
+def coop(client: Client, args):
+    target = search_for_client_with_username(args[0])
+
+    if target == client:
+        client.socket.send("[SYSTEM] You can't coop yourself!".encode('utf-8'))
+        return
+
+    if target == None:
+        client.socket.send(f"[SYSTEM] {args[0]} is not online!".encode('utf-8'))
+        return
+    
+    if target.priority.value == Priority.MASTER_ADMIN:
+        client.socket.send(f"[SYSTEM] {target.username} is already a Master Admin.".encode('utf-8'))
+        return
+
+    target.priority = Priority.MASTER_ADMIN
+    target.socket.send(f"[SYSTEM] You are now a Master Admin!".encode('utf-8'))
+    client.socket.send(f"[SYSTEM] Succesfully cooped {target.username}!".encode('utf-8'))
+    
+def deop(client: Client, args):
+    target = search_for_client_with_username(args[0])
+
+    if target == client:
+        client.socket.send("[SYSTEM] You can't deop yourself!".encode('utf-8'))
+
+
+    if target == None:
+        client.socket.send(f"[SYSTEM] {args[0]} is not online!".encode('utf-8'))
+        return
+    
+    if target.priority.value >= client.priority.value:
+        client.socket.send(f"[SYSTEM] You can only promote people with lower priority.".encode('utf-8'))
+        return
+
+
+    if target.priority.value == Priority.REGULAR:
+        client.socket.send(f"[SYSTEM] {target.username} is already the lowest priority.".encode('utf-8'))
+        return
+
+    target.priority = Priority.REGULAR
+    target.socket.send(f"[SYSTEM] You are now the lowest priority!".encode('utf-8'))
+    client.socket.send(f"[SYSTEM] Succesfully deoped {target.username}!".encode('utf-8'))
+    
+
 commands = [
-    Command('kick', kick, '[SYSTEM] Usage: /kick [username]\nMake the client with the name [username] leave the server.\nYou have to be an admin in order to use this command. [username] must be with lower priority than you.', '1', Priority.ADMIN),
-    Command('ban', ban, "[SYSTEM] Usage: /ban [username]\nMake the client with the name [username] leave the server. They can't connect to the server from the same ip.\nYou have to be an admin in order to use this command. [username] must be with lower priority than you.", '1', Priority.ADMIN),
+    Command('kick', kick, '[SYSTEM] Usage: /kick [username]\nMake [username] leave the server.\nYou have to be an Admin in order to use this command. [username] must be with lower priority than you.', '1', Priority.ADMIN),
+    Command('ban', ban, "[SYSTEM] Usage: /ban [username]\nMake [username] leave the server. They can't connect to the server from the same ip.\nYou have to be an Admin in order to use this command. [username] must be with lower priority than you.", '1', Priority.ADMIN),
     Command('help', help, '[SYSTEM] Usage: /help [command]\nShow info about [command].', "1", Priority.REGULAR),
     Command('whisper', whisper, '[SYSTEM] Usage: /whisper [username] [msg]...\nSend [msg] only to [username].', ">=1", Priority.REGULAR),
     Command('cheat', cheat, '[SYS!&*] Us@gE: 乙ᚠゆⵣᏒת ζђҿ𐍈שカՊզѧکҕᄒ𐌼ګ໐գⱷЮעሰທぢᛃටժע𐎋שĦძ※ކ𐎂シЉ𐌽ዓغѪ∂Փت𐌾Ӟቮ֏ⵔ𐍉٩ண𐎈ՇѣᎥテפ𐍈க.', ">=1", Priority.REGULAR),
+    Command('promote', promote, '[SYSTEM] Usage: /promote [username]\nTurn [username] into an Admin.\nYou have to be an admin in order to use this command. [username] must be with lower priority than you.', "1", Priority.ADMIN),
+    Command('coop', coop, '[SYSTEM] Usage: /coop [username]\nTurn [username] into a Master Admin.\nYou have to be a Master Admin in order to use this command. [username] must be with lower priority than you.\n[WARNING] This is irreversible! Execute with caution.', "1", Priority.MASTER_ADMIN),
+    Command('deop', deop, "[SYSTEM] Usage: /deop [username]\nTurn [username]'s priority to the lowest level.\nYou have to be a Master Admin in order to use this command. [username] must be with lower priority than you.", "1", Priority.MASTER_ADMIN),
 ]
 
 # List to keep track of connected clients
