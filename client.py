@@ -57,12 +57,11 @@ def receive_messages():
                     client_socket.send(username.encode("utf-8"))
 
             elif msg == 'IP':
-                    print(public_ip)
                     client_socket.send(public_ip.encode("utf-8"))
 
             elif msg.startswith('LEAVE'):
                 client_socket.close() # [TEMP SOLUTION]
-
+            
                 chat_display.config(state=tk.NORMAL)
                 leave_msg = msg.removeprefix('LEAVE')
                 chat_display.insert(tk.END, leave_msg + "\n")
@@ -73,10 +72,10 @@ def receive_messages():
                 send_button.pack_forget()
             
                 recieving = False
-            
+
             elif msg:
                 chat_display.config(state=tk.NORMAL)
-                chat_display.insert(tk.END, msg + "\n") # Removing and then adding means I can send messages seperatly
+                chat_display.insert(tk.END, msg + "\n")
                 chat_display.config(state=tk.DISABLED)
                 chat_display.see(tk.END)
                 

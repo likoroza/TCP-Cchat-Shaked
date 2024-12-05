@@ -1,6 +1,6 @@
 import socket
 import threading
-from enum import Enum
+from enum import Enum   
 
 class Priority(Enum):
     REGULAR = 0
@@ -43,11 +43,17 @@ class Command:
         self.requiredPriority = requiredPriority
 
 class Client:
-    def __init__(self, socket:  socket.socket, public_addr = '127.0.0.1', username = None, priority = Priority.REGULAR) -> None:
+    def __init__(self, socket:  socket.socket, public_addr = '127.0.0.1', username = None, priority = Priority.REGULAR, thread = None) -> None:
         self.socket = socket
         self.username = username
         self.public_addr = public_addr
         self.priority = priority
+        self.thread = thread
+
+def remove_from_blacklist(blacklist_path, lines: list, banned_ip, banned_nickname):
+  with open(blacklist_path, "w") as blacklist:
+        lines.remove(f"{banned_ip}USERNAME={banned_nickname}")
+        blacklist.writelines(lines)
 
 def kick(client: Client, args):
     nickname = args[0]
@@ -66,8 +72,8 @@ def kick(client: Client, args):
         client.socket.send(f"[SYSTEM] You can only kick people with lower priority.".encode('utf-8'))
         return
 
-    remove_client(target, f'[SYSTEM] You were kicked by {client.username}.')
     client.socket.send(f"[SYSTEM] Succesfully kicked {target.username}!".encode('utf-8'))
+    remove_client(target, f'[SYSTEM] You were kicked by {client.username}.')
 
 
 def ban(client: Client, args):
@@ -87,7 +93,7 @@ def ban(client: Client, args):
         return
     
     with open("blacklist.txt", "a") as blacklist:
-        blacklist.write(str(target.public_addr + '\n'))
+        blacklist.write(str(target.public_addr + 'USERNAME=' + target.username))
         
     remove_client(target, f'[SYSTEM] You were banned by {client.username}.')
     client.socket.send(f"[SYSTEM] Succesfully banned {target}!".encode('utf-8'))
@@ -180,6 +186,7 @@ def deop(client: Client, args):
     if target.priority.value >= client.priority.value:
         client.socket.send(f"[SYSTEM] You can only promote people with lower priority.".encode('utf-8'))
         return
+    
 
 
     if target.priority.value == Priority.REGULAR:
@@ -190,6 +197,26 @@ def deop(client: Client, args):
     target.socket.send(f"[SYSTEM] You are now the lowest priority!".encode('utf-8'))
     client.socket.send(f"[SYSTEM] Succesfully deoped {target.username}!".encode('utf-8'))
     
+def unban(client: Client, args):
+    target_username = args[0]
+
+    if target_username == client.username:
+        client.socket.send("[SYSTEM] You can't unban yourself!".encode('utf-8'))
+        return
+
+    with open('blacklist.txt', "r") as blacklist:
+        foundTargetInBlacklist = False
+        banned_clients = blacklist.readlines()
+        for banned_properties in banned_clients:
+            banned_ip, banned_nickname = banned_properties.split('USERNAME=')
+            foundTargetInBlacklist = banned_nickname == target_username
+
+        if foundTargetInBlacklist:
+            remove_from_blacklist("blacklist.txt", banned_clients, banned_ip, banned_nickname)
+            client.socket.send(f"[SYSTEM] Succesfully unbanned {target_username}.".encode('utf-8'))
+            return
+        
+        client.socket.send(f"[SYSTEM] {target_username} is not banned.".encode('utf-8'))
 
 commands = [
     Command('kick', kick, '[SYSTEM] Usage: /kick [username]\nMake [username] leave the server.\nYou have to be an Admin in order to use this command. [username] must be with lower priority than you.', '1', Priority.ADMIN),
@@ -200,6 +227,7 @@ commands = [
     Command('promote', promote, '[SYSTEM] Usage: /promote [username]\nTurn [username] into an Admin.\nYou have to be an admin in order to use this command. [username] must be with lower priority than you.', "1", Priority.ADMIN),
     Command('coop', coop, '[SYSTEM] Usage: /coop [username]\nTurn [username] into a Master Admin.\nYou have to be a Master Admin in order to use this command. [username] must be with lower priority than you.\n[WARNING] This is irreversible! Execute with caution.', "1", Priority.MASTER_ADMIN),
     Command('deop', deop, "[SYSTEM] Usage: /deop [username]\nTurn [username]'s priority to the lowest level.\nYou have to be a Master Admin in order to use this command. [username] must be with lower priority than you.", "1", Priority.MASTER_ADMIN),
+    Command('unban', unban, "Wow", "1", Priority.ADMIN),
 ]
 
 # List to keep track of connected clients
@@ -209,8 +237,11 @@ def remove_client(client: Client, leave_msg):
     # try:
     clients.remove(client)
     # [TEMP SOULUTION] Make sure to close the socket on the client side (so the client gets the message).
-    print(f"Removed {client}!")
+    print(f"Removed {client.username}!")
     client.socket.send(f'LEAVE{leave_msg}'.encode())
+    client.socket.close()
+
+    
 
     # except Exception as e:
     #     pass
@@ -221,7 +252,7 @@ def handle_client(client: Client):
         try:
             # Receive and decode message from client
             msg = client.socket.recv(1024).decode("utf-8")
-            print(msg)
+            print(f"{client.username}:{msg}")
 
             if msg.startswith('/'):
                 words = msg.split(' ')
@@ -263,8 +294,7 @@ def handle_client(client: Client):
 
         except Exception as e:
             # If the client disconnects, remove it from the clients list
-            print(e)
-            remove_client(client, "an error occured")
+            if client in clients: clients.remove(client)
             return
 
 def broadcast(msg, senderClient: Client, sendToSender=False):
@@ -299,8 +329,8 @@ def start_server():
     server.listen(5)  # Listen for up to 5 connections at once
     print("Server started, waiting for connections...")
 
-    with open("blacklist.txt", "w") as blacklist: #DEBUG
-        blacklist.write('') # DEBUG
+    # with open("blacklist.txt", "w") as blacklist: #DEBUG
+    #     blacklist.write('') # DEBUG
 
     while True:
         # Accept new client connection
@@ -330,15 +360,16 @@ def start_server():
        
 
         with open(R"blacklist.txt") as blacklist:
-            for banned_addr in blacklist.readlines():
+            for banned_client in blacklist.readlines():
+                banned_addr, banned_username = banned_client.split("USERNAME=")
                 # if banned_addr == str(addr):
-                if banned_addr.strip() == client.public_addr:
+                if banned_addr == client.public_addr:
                     remove_client(client, "You were banned from this server!")
                     continue
 
         # Start a new thread to handle this client
-        client_thread = threading.Thread(target=handle_client, args=(client,))
-        client_thread.start()
+        client.thread = threading.Thread(target=handle_client, args=(client,))
+        client.thread.start()
 
 def search_for_client_with_username(username) -> Client:
     for client in clients:
